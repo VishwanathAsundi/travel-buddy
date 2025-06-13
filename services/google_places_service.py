@@ -67,10 +67,10 @@ class GooglePlacesService:
             
             # Define search queries based on type
             search_queries = {
-                'tourist_places': ['tourist_attraction', 'museum', 'park', 'zoo', 'amusement_park'],
-                'restaurants': ['restaurant', 'food', 'meal_takeaway'],
-                'activities': ['gym', 'spa', 'movie_theater', 'shopping_mall', 'night_club'],
-                'hotels': ['lodging', 'hotel', 'resort']
+                'tourist_places': ['beaches', 'mountains', 'tourist attraction', 'museum', 'park', 'zoo', 'amusement park', 'temples'],
+                'restaurants': ['restaurant', 'food', 'meal takeaway', 'unique food'],
+                'activities': ['trekking', 'sports', 'shopping mall', 'night club', 'yoga', 'concerts', 'new experiences'],
+                'hotels': ['lodging', 'hotel', 'resorts']
             }
             
             all_results = []
@@ -116,7 +116,8 @@ class GooglePlacesService:
             result = self.gmaps.place(
                 place_id=place_id,
                 fields=['name', 'rating', 'formatted_phone_number', 'formatted_address',
-                       'website', 'opening_hours', 'price_level', 'reviews', 'user_ratings_total']
+                       'website', 'opening_hours', 'price_level', 'reviews', 'user_ratings_total',
+                        'photos', 'geometry', 'type', 'vicinity'] 
             )
             return result.get('result', {})
         except Exception as e:

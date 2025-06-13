@@ -5,14 +5,15 @@ from services.google_places_service import GooglePlacesService
 from services.context_manager import ContextManager
 from utils.helpers import display_places_data, create_summary_card, format_ai_response, get_distance_options
 from config import Config
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
 # Page configuration
 st.set_page_config(
-    page_title="Travel Buddy 🧳",
-    page_icon="🧳",
+    page_title="Travel Buddy 🏍️",
+    page_icon="🏍️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -28,6 +29,125 @@ def init_services():
 
 services = init_services()
 
+def display_chat_interface():
+    """Display an integrated chat interface with conversation history"""
+    st.header("💬 Chat with Travel Buddy")
+    
+    # Create chat container with custom styling
+    chat_container = st.container()
+    
+    with chat_container:
+        if 'conversation_history' in st.session_state and st.session_state.conversation_history:
+            # Filter out the initial search queries to avoid duplication
+            # Only show follow-up conversations (skip first 2 messages which are initial search)
+            follow_up_messages = []
+            if len(st.session_state.conversation_history) > 2:
+                follow_up_messages = st.session_state.conversation_history[2:]
+
+            # Remove duplicate messages from the follow_up_messages
+            seen_messages = set()
+            unique_follow_up_messages = []
+            for msg in follow_up_messages:
+                msg_content = msg.get('content', '').strip().lower()
+                if msg_content and msg_content not in seen_messages:
+                    seen_messages.add(msg_content)
+                    unique_follow_up_messages.append(msg)
+
+            if unique_follow_up_messages:
+                
+                # Display messages in a clean chat format
+                for i, msg in enumerate(unique_follow_up_messages[-10:]):  # Show last 10 follow-up messages
+                    if msg['role'] == 'user':
+                        st.markdown(f"""
+                        <div style="display: flex; justify-content: flex-end; margin: 10px 0;">
+                            <div style="background: #ccc;
+                            color: #000; padding: 12px 16px; border-radius: 18px 18px 5px 18px; 
+                                        max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                <strong>You:</strong><br>{msg['content']}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="display: flex; justify-content: flex-start; margin: 10px 0;">
+                            <div style="background: #ccc;
+                                        color: #000; padding: 12px 16px; border-radius: 18px 18px 18px 5px; 
+                                        max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                <strong>🤖 Travel Buddy:</strong><br>{format_ai_response(msg['content'])}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("💡 Start a conversation! Ask any follow-up questions about your travel plans.")
+        else:
+            st.info("💡 No conversation yet. Ask your first question about the places you're exploring!")
+
+def handle_follow_up_question(question, search_results):
+    """Handle follow-up questions with proper error handling and duplicate prevention"""
+    try:
+        # Initialize conversation history if needed
+        if 'conversation_history' not in st.session_state:
+            st.session_state.conversation_history = []
+        
+        # Check if this exact question was just asked to prevent duplicates
+        if (st.session_state.conversation_history and 
+            len(st.session_state.conversation_history) >= 2):
+            # Check the last user message
+            last_messages = st.session_state.conversation_history[-2:]
+            for msg in last_messages:
+                if (msg.get('role') == 'user' and 
+                    msg.get('content', '').strip().lower() == question.strip().lower()):
+                    # Question already exists, don't add duplicate
+                    logging.info(f"Duplicate question detected, skipping: {question}")
+                    return None
+        
+        # Get context and generate response
+        context_history = services['context'].get_context_messages()
+        
+        ai_response = services['openai'].generate_travel_recommendations(
+            search_results['places_data'],
+            search_results['query_type'],
+            question,
+            context_history
+        )
+        
+        # Add both user question and AI response to conversation history
+        st.session_state.conversation_history.extend([
+            {
+                'role': 'user',
+                'content': question,
+                'timestamp': int(time.time() * 1000),
+                'id': f"user_{int(time.time() * 1000)}"
+            },
+            {
+                'role': 'assistant',
+                'content': ai_response,
+                'timestamp': int(time.time() * 1000) + 1,
+                'id': f"assistant_{int(time.time() * 1000)}"
+            }
+        ])
+        
+        # Update context manager
+        services['context'].add_message("user", question)
+        services['context'].add_message("assistant", ai_response)
+        
+        return ai_response
+        
+    except Exception as e:
+        logging.error(f"Error handling follow-up question: {str(e)}")
+        error_msg = f"Sorry, I encountered an error while processing your question: {str(e)}"
+        
+        # Add error to conversation history
+        error_time = int(time.time() * 1000)
+        st.session_state.conversation_history.append({
+            'role': 'assistant',
+            'content': error_msg,
+            'timestamp': error_time,
+            'id': f"error_{error_time}"
+        })
+        
+        return error_msg
+
 def main():
     # Initialize session state variables
     if 'conversation_history' not in st.session_state:
@@ -38,8 +158,11 @@ def main():
 
     if 'search_results' not in st.session_state:
         st.session_state.search_results = None
+    
+    if 'processing_question' not in st.session_state:
+        st.session_state.processing_question = False
 
-    st.title("🧳 Travel Buddy")
+    st.title("🧳 Travel Buddy 🏍️")
     st.markdown("*Your AI-powered travel companion for discovering amazing places, restaurants, activities, and accommodations.*")
     
     # Sidebar
@@ -47,7 +170,7 @@ def main():
         st.header("🎯 Search Options")
         
         # Location input
-        location = st.text_input("📍 Enter Location", placeholder="e.g., Paris, New York, Tokyo")
+        location = st.text_input("📍 Enter Location", placeholder="e.g., Gokarna, Goa, Italy")
         
         # Search radius
         distance_options = get_distance_options()
@@ -71,13 +194,23 @@ def main():
         # Context management
         st.header("💬 Conversation")
         if st.button("🗑️ Clear History"):
+            # Keep initial search results but clear follow-up conversations
+            if len(st.session_state.conversation_history) > 2:
+                st.session_state.conversation_history = st.session_state.conversation_history[:2]
+            else:
+                st.session_state.conversation_history = []
             services['context'].clear_history()
-            st.success("Conversation history cleared!")
+            st.session_state.processing_question = False
+            st.success("Chat history cleared!")
             st.rerun()
         
         # Display conversation count
         history_count = len(st.session_state.get('conversation_history', []))
-        st.info(f"Messages in history: {history_count}")
+        if history_count > 2:
+            follow_up_count = history_count - 2
+            st.info(f"Follow-up messages: {follow_up_count}")
+        else:
+            st.info("No follow-up conversations yet")
     
     # Main content area
     if not location:
@@ -123,6 +256,7 @@ def main():
         
         return
     
+    # Handle search
     if search_clicked or st.session_state.get('last_search') != (location, query_type):
         with st.spinner(f"🔍 Searching for {selected_query_type.lower()} in {location}..."):
             # Search for places
@@ -153,9 +287,29 @@ def main():
                     'location': location,
                     'query_type': query_type
                 }
+                
+                # Clear previous conversation and add new search
+                search_time = int(time.time() * 1000)
+                st.session_state.conversation_history = [
+                    {
+                        'role': 'user',
+                        'content': user_query,
+                        'timestamp': search_time,
+                        'id': f"search_user_{search_time}"
+                    },
+                    {
+                        'role': 'assistant',
+                        'content': ai_response,
+                        'timestamp': search_time + 1,
+                        'id': f"search_assistant_{search_time}"
+                    }
+                ]
+                st.session_state.processing_question = False
+            else:
+                st.error(f"No {selected_query_type.lower()} found in {location}. Try a different location or search type.")
     
     # Display results
-    if 'search_results' in st.session_state:
+    if st.session_state.search_results:
         results = st.session_state.search_results
         
         st.header(f"🌟 Results for {results['location']}")
@@ -174,52 +328,130 @@ def main():
             st.subheader("🗺️ Nearby Places to Explore")
             nearby_places = services['places'].search_nearby_places(location, 50)
             if nearby_places:
-                nearby_names = [place.get('name', 'Unknown') for place in nearby_places[:5]]
+                nearby_names = [place.get('name', 'Unknown') for place in nearby_places[:10]]
                 st.write("Consider visiting these nearby locations: " + ", ".join(nearby_names))
     
-    # Chat interface for follow-up questions
-    st.header("💬 Ask Follow-up Questions")
-    
-    # Display recent conversation
-    if st.session_state.get('conversation_history'):
-        with st.expander("📖 Recent Conversation", expanded=False):
-            for msg in st.session_state.conversation_history[-6:]:
-                role_icon = "🧑‍💼" if msg['role'] == 'user' else "🤖"
-                st.markdown(f"**{role_icon} {msg['role'].title()}:** {msg['content'][:200]}...")
-    
-    # Follow-up question input
-    follow_up_question = st.text_input(
-        "Ask a follow-up question about your travel plans:",
-        placeholder="e.g., What's the best time to visit these places? Any budget-friendly options?"
-    )
-    
-    if st.button("💬 Ask Question") and follow_up_question:
-        if 'search_results' in st.session_state:
-            with st.spinner("🤔 Thinking..."):
-                context_history = services['context'].get_context_messages()
-                
-                ai_response = services['openai'].generate_travel_recommendations(
-                    st.session_state.search_results['places_data'],
-                    st.session_state.search_results['query_type'],
-                    follow_up_question,
-                    context_history
+    # Chat interface for follow-up questions - FIXED SECTION
+    if st.session_state.search_results:
+        st.markdown("---")
+        
+        # Display integrated chat interface
+        display_chat_interface()
+        
+        # Input section at the bottom
+        st.markdown("### 💭 Ask a Question")
+        
+        # Create columns for better layout
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            # Use a form to handle the input properly
+            with st.form(key="chat_form", clear_on_submit=True):
+                follow_up_question = st.text_input(
+                    "Ask a follow-up question",
+                    placeholder="Ask about timing, budget, alternatives, or anything else...",
+                    label_visibility="collapsed",
+                    disabled=st.session_state.processing_question
                 )
                 
-                # Save to context
-                services['context'].add_message("user", follow_up_question)
-                services['context'].add_message("assistant", ai_response)
+                # Create button columns
+                btn_col1, btn_col2 = st.columns([1, 1])
                 
-                # Display response
-                st.subheader("🤖 Travel Buddy's Response")
-                st.markdown(format_ai_response(ai_response))
+                with btn_col1:
+                    submit_button = st.form_submit_button(
+                        "💬 Send", 
+                        type="primary",
+                        disabled=st.session_state.processing_question
+                    )
                 
+                with btn_col2:
+                    if st.form_submit_button("🗑️ Clear Chat"):
+                        # Clear only follow-up conversation, keep initial search
+                        if len(st.session_state.conversation_history) > 2:
+                            st.session_state.conversation_history = st.session_state.conversation_history[:2]
+                        st.session_state.processing_question = False
+                        st.rerun()
+        
+        with col2:
+            # Quick question suggestions - FIXED
+            st.markdown("**💡 Quick Questions:**")
+            
+            # Disable buttons when processing
+            button_disabled = st.session_state.processing_question
+            
+            # Best times question
+            if st.button(
+                "🕒 Best times to visit?", 
+                key="time_btn", 
+                disabled=button_disabled,
+                use_container_width=True
+            ):
+                if not st.session_state.processing_question:
+                    st.session_state.processing_question = True
+                    with st.spinner("🤔 Thinking..."):
+                        response = handle_follow_up_question(
+                            "What are the best times to visit these places?", 
+                            st.session_state.search_results
+                        )
+                    st.session_state.processing_question = False
+                    if response:
+                        st.rerun()
+            
+            # Budget question  
+            if st.button(
+                "💰 Budget options?", 
+                key="budget_btn", 
+                disabled=button_disabled,
+                use_container_width=True
+            ):
+                if not st.session_state.processing_question:
+                    st.session_state.processing_question = True
+                    with st.spinner("🤔 Thinking..."):
+                        response = handle_follow_up_question(
+                            "What are some budget-friendly options among these places?", 
+                            st.session_state.search_results
+                        )
+                    st.session_state.processing_question = False
+                    if response:
+                        st.rerun()
+            
+            # Transportation question
+            if st.button(
+                "🚗 How to get there?", 
+                key="transport_btn", 
+                disabled=button_disabled,
+                use_container_width=True
+            ):
+                if not st.session_state.processing_question:
+                    st.session_state.processing_question = True
+                    with st.spinner("🤔 Thinking..."):
+                        response = handle_follow_up_question(
+                            "How can I get to these places? What are the transportation options?", 
+                            st.session_state.search_results
+                        )
+                    st.session_state.processing_question = False
+                    if response:
+                        st.rerun()
+        
+        # Handle form submission
+        if submit_button and follow_up_question.strip() and not st.session_state.processing_question:
+            st.session_state.processing_question = True
+            with st.spinner("🤔 Thinking..."):
+                response = handle_follow_up_question(follow_up_question.strip(), st.session_state.search_results)
+            st.session_state.processing_question = False
+            if response:
                 st.rerun()
-        else:
-            st.warning("Please search for a location first before asking follow-up questions.")
+        
+        # Show processing status
+        if st.session_state.processing_question:
+            st.info("🔄 Processing your question... Please wait.")
+    
+    else:
+        st.info("🔍 Search for a location first to start chatting about travel recommendations!")
 
     # Footer
     st.markdown("---")
-    st.markdown("*Built with ❤️ using Streamlit, Azure OpenAI, and Google Places API*")
+    st.markdown("*Built with ❤️ by Traveller*")
 
 if __name__ == "__main__":
     main()
