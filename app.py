@@ -70,7 +70,7 @@ def display_chat_interface():
                     else:
                         st.markdown(f"""
                         <div style="display: flex; justify-content: flex-start; margin: 10px 0;">
-                            <div style="background: #ccc;
+                            <div style="background: rgb(221, 148, 148);
                                         color: #000; padding: 12px 16px; border-radius: 18px 18px 18px 5px; 
                                         max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
                                 <strong>🤖 Travel Buddy:</strong><br>{format_ai_response(msg['content'])}
@@ -341,12 +341,8 @@ def main():
         # Input section at the bottom
         st.markdown("### 💭 Ask a Question")
         
-        # Create columns for better layout
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            # Use a form to handle the input properly
-            with st.form(key="chat_form", clear_on_submit=True):
+        # Use a form to handle the input properly
+        with st.form(key="chat_form", clear_on_submit=True):
                 follow_up_question = st.text_input(
                     "Ask a follow-up question",
                     placeholder="Ask about timing, budget, alternatives, or anything else...",
@@ -354,84 +350,27 @@ def main():
                     disabled=st.session_state.processing_question
                 )
                 
-                # Create button columns
-                btn_col1, btn_col2 = st.columns([1, 1])
-                
-                with btn_col1:
-                    submit_button = st.form_submit_button(
-                        "💬 Send", 
-                        type="primary",
-                        disabled=st.session_state.processing_question
-                    )
-                
-                with btn_col2:
-                    if st.form_submit_button("🗑️ Clear Chat"):
-                        # Clear only follow-up conversation, keep initial search
-                        if len(st.session_state.conversation_history) > 2:
-                            st.session_state.conversation_history = st.session_state.conversation_history[:2]
-                        st.session_state.processing_question = False
-                        st.rerun()
-        
-        with col2:
-            # Quick question suggestions - FIXED
-            st.markdown("**💡 Quick Questions:**")
-            
-            # Disable buttons when processing
-            button_disabled = st.session_state.processing_question
-            
-            # Best times question
-            if st.button(
-                "🕒 Best times to visit?", 
-                key="time_btn", 
-                disabled=button_disabled,
-                use_container_width=True
-            ):
-                if not st.session_state.processing_question:
-                    st.session_state.processing_question = True
-                    with st.spinner("🤔 Thinking..."):
-                        response = handle_follow_up_question(
-                            "What are the best times to visit these places?", 
-                            st.session_state.search_results
+               # Create button container
+                with st.container():
+                    # Create columns: wide left for Send button, right-aligned narrow column for Clear Chat
+                    col1, col2 = st.columns([6, 1])
+
+                    with col1:
+                        submit_button = st.form_submit_button(
+                            "💬 Send",
+                            type="primary",
+                            disabled=st.session_state.processing_question
                         )
-                    st.session_state.processing_question = False
-                    if response:
-                        st.rerun()
-            
-            # Budget question  
-            if st.button(
-                "💰 Budget options?", 
-                key="budget_btn", 
-                disabled=button_disabled,
-                use_container_width=True
-            ):
-                if not st.session_state.processing_question:
-                    st.session_state.processing_question = True
-                    with st.spinner("🤔 Thinking..."):
-                        response = handle_follow_up_question(
-                            "What are some budget-friendly options among these places?", 
-                            st.session_state.search_results
-                        )
-                    st.session_state.processing_question = False
-                    if response:
-                        st.rerun()
-            
-            # Transportation question
-            if st.button(
-                "🚗 How to get there?", 
-                key="transport_btn", 
-                disabled=button_disabled,
-                use_container_width=True
-            ):
-                if not st.session_state.processing_question:
-                    st.session_state.processing_question = True
-                    with st.spinner("🤔 Thinking..."):
-                        response = handle_follow_up_question(
-                            "How can I get to these places? What are the transportation options?", 
-                            st.session_state.search_results
-                        )
-                    st.session_state.processing_question = False
-                    if response:
-                        st.rerun()
+
+                    with col2:
+                        # Right-align Clear Chat button manually using HTML/CSS inside markdown
+                        clear_btn_clicked = st.form_submit_button("🗑️ Clear Chat")
+                        if clear_btn_clicked:
+                            if len(st.session_state.conversation_history) > 2:
+                                st.session_state.conversation_history = st.session_state.conversation_history[:2]
+                            st.session_state.processing_question = False
+                            st.rerun()
+
         
         # Handle form submission
         if submit_button and follow_up_question.strip() and not st.session_state.processing_question:
