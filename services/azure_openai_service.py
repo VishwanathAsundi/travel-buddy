@@ -137,7 +137,7 @@ class AzureOpenAIService:
     
     def _get_system_prompt(self, query_type):
         base_prompt = """You are Travel Buddy, an expert travel assistant that provides detailed, helpful, and personalized travel recommendations. You have access to real-time data about places, restaurants, hotels, and activities."""
-        
+
         type_specific_prompts = {
             "tourist_places": """
             Focus on providing information about:
@@ -174,11 +174,21 @@ class AzureOpenAIService:
             - Location advantages
             - Guest rating summaries
             - Booking recommendations
+            """,
+            "polite_response": """
+            Respond politely and warmly without calling any APIs. Your tone should be friendly, conversational, and humanlike.
+
+            Examples:
+            - "Hi there! 😊 I'm your travel buddy. Let me know what destination you're exploring or what kind of travel help you need."
+            - "You're very welcome! If you're planning a trip or need suggestions on where to go or what to do, I'm here to help!"
+            - "Hello! 👋 How can I assist you with your travel plans today?"
+
+            After acknowledging greetings or thanks, gently guide the user to ask a travel-related question.
             """
         }
-        
+
         return base_prompt + type_specific_prompts.get(query_type, "")
-    
+
     def _create_user_prompt(self, place_data, user_query, query_type):
         prompt = f"User Query: {user_query}\n\n"
         prompt += f"Query Type: {query_type}\n\n"
