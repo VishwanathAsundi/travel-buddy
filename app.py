@@ -6,6 +6,15 @@ from services.context_manager import ContextManager
 from utils.helpers import display_places_data, create_summary_card, format_ai_response, get_distance_options
 from config import Config
 import time
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+import io
+from datetime import datetime
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +37,202 @@ def init_services():
     }
 
 services = init_services()
+
+def clean_text_for_pdf(text):
+    """Clean text by removing markdown and HTML formatting for PDF"""
+    # Remove markdown formatting
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Bold
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # Italic
+    text = re.sub(r'#{1,6}\s*(.*)', r'\1', text)  # Headers
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)  # Links
+    text = re.sub(r'`(.*?)`', r'\1', text)        # Code
+    
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up extra whitespace
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    text = text.strip()
+    
+    return text
+
+def create_pdf_report(search_results, conversation_history):
+    """Create a PDF report with travel recommendations and chat history"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
+                           topMargin=72, bottomMargin=18)
+    
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2E86AB')
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=20,
+        textColor=colors.HexColor('#A23B72')
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=12,
+        alignment=TA_JUSTIFY
+    )
+    
+    chat_user_style = ParagraphStyle(
+        'ChatUser',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=8,
+        leftIndent=20,
+        textColor=colors.HexColor('#2C5F2D')
+    )
+    
+    chat_ai_style = ParagraphStyle(
+        'ChatAI',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=8,
+        leftIndent=40,
+        textColor=colors.HexColor('#97233F')
+    )
+    
+    # Title
+    title = Paragraph("🧳 Travel Buddy Recommendations", title_style)
+    elements.append(title)
+    
+    # Generated date
+    date_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    date_para = Paragraph(f"Generated on {date_str}", styles['Normal'])
+    elements.append(date_para)
+    elements.append(Spacer(1, 20))
+    
+    # Location and search type
+    location_info = Paragraph(f"<b>Location:</b> {search_results['location']}", normal_style)
+    elements.append(location_info)
+    
+    query_type_map = {
+        "tourist_places": "Tourist Places",
+        "restaurants": "Restaurants",
+        "activities": "Activities",
+        "hotels": "Hotels & Resorts"
+    }
+    query_display = query_type_map.get(search_results['query_type'], search_results['query_type'])
+    query_info = Paragraph(f"<b>Search Type:</b> {query_display}", normal_style)
+    elements.append(query_info)
+    elements.append(Spacer(1, 20))
+    
+    # AI Recommendations
+    rec_title = Paragraph("🤖 AI Travel Recommendations", subtitle_style)
+    elements.append(rec_title)
+    
+    # Clean and format AI response
+    cleaned_response = clean_text_for_pdf(search_results['ai_response'])
+    
+    # Split response into paragraphs and format
+    paragraphs = cleaned_response.split('\n\n')
+    for para in paragraphs:
+        if para.strip():
+            # Handle numbered lists
+            if re.match(r'^\d+\.', para.strip()):
+                para_obj = Paragraph(para.strip(), normal_style)
+            else:
+                para_obj = Paragraph(para.strip(), normal_style)
+            elements.append(para_obj)
+    
+    elements.append(Spacer(1, 20))
+    
+    # Places Details Table
+    if search_results['places_data']:
+        places_title = Paragraph("📊 Detailed Place Information", subtitle_style)
+        elements.append(places_title)
+        
+        # Create table data
+        table_data = [['Name', 'Rating', 'Price Level', 'Address']]
+        
+        for place in search_results['places_data'][:10]:  # Limit to first 10 places
+            name = place.get('name', 'N/A')[:30]  # Truncate long names
+            rating = str(place.get('rating', 'N/A'))
+            price_level = '💰' * place.get('price_level', 0) if place.get('price_level') else 'N/A'
+            address = place.get('vicinity', place.get('formatted_address', 'N/A'))[:40]
+            
+            table_data.append([name, rating, price_level, address])
+        
+        # Create table
+        table = Table(table_data, colWidths=[2.2*inch, 0.8*inch, 1*inch, 2.5*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        
+        elements.append(table)
+        elements.append(Spacer(1, 20))
+    
+    # Chat History
+    if conversation_history and len(conversation_history) > 2:
+        elements.append(PageBreak())
+        chat_title = Paragraph("💬 Conversation History", subtitle_style)
+        elements.append(chat_title)
+        
+        # Skip initial search messages, show only follow-up conversations
+        follow_up_messages = conversation_history[2:] if len(conversation_history) > 2 else []
+        
+        # Remove duplicates (similar to your existing logic)
+        seen_messages = set()
+        unique_messages = []
+        for msg in follow_up_messages:
+            msg_content = msg.get('content', '').strip().lower()
+            if msg_content and msg_content not in seen_messages:
+                seen_messages.add(msg_content)
+                unique_messages.append(msg)
+        
+        for msg in unique_messages[-20:]:  # Show last 20 messages
+            if msg['role'] == 'user':
+                user_text = f"<b>You:</b> {clean_text_for_pdf(msg['content'])}"
+                user_para = Paragraph(user_text, chat_user_style)
+                elements.append(user_para)
+            else:
+                ai_text = f"<b>🤖 Travel Buddy:</b> {clean_text_for_pdf(msg['content'])}"
+                ai_para = Paragraph(ai_text, chat_ai_style)
+                elements.append(ai_para)
+            
+            elements.append(Spacer(1, 8))
+    
+    # Footer
+    elements.append(Spacer(1, 30))
+    footer = Paragraph("Built with ❤️ by Traveller Vishwa - Travel Buddy App", 
+                      ParagraphStyle('Footer', parent=styles['Normal'], 
+                                   fontSize=8, alignment=TA_CENTER, 
+                                   textColor=colors.grey))
+    elements.append(footer)
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 def display_chat_interface():
     """Display an integrated chat interface with conversation history"""
@@ -122,7 +327,7 @@ def handle_follow_up_question(question, search_results):
             {
                 'role': 'assistant',
                 'content': ai_response,
-                'timestamp': int(time.time() * 1000) + 1,
+                'timestamp': int(time.time() * 1000),
                 'id': f"assistant_{int(time.time() * 1000)}"
             }
         ])
@@ -170,7 +375,7 @@ def main():
         st.header("🎯 Search Options")
         
         # Location input
-        location = st.text_input("📍 Enter Location", placeholder="e.g., Gokarna, Goa, Italy")
+        location = st.text_input("📍 Enter Location", placeholder="e.g., Gokarna, Hampi, Mysore..")
         
         # Search radius
         distance_options = get_distance_options()
@@ -190,6 +395,32 @@ def main():
         
         # Search button
         search_clicked = st.button("🔍 Search", type="primary", use_container_width=True)
+        
+        # PDF Download section
+        if st.session_state.search_results:
+            st.markdown("---")
+            st.header("📄 Export Options")
+            
+            try:
+                pdf_buffer = create_pdf_report(st.session_state.search_results, 
+                                             st.session_state.conversation_history)
+                
+                filename = f"travel_buddy_{st.session_state.search_results['location'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                
+                st.download_button(
+                    label="📥 Download PDF Report",
+                    data=pdf_buffer,
+                    file_name=filename,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="secondary"
+                )
+                
+                st.success("✅ PDF ready for download!")
+                
+            except Exception as e:
+                logging.error(f"Error creating PDF: {str(e)}")
+                st.error("❌ Error creating PDF. Please try again.")
         
         # Context management
         st.header("💬 Conversation")
@@ -390,7 +621,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("*Built with ❤️ by Traveller*")
+    st.markdown("*Built with ❤️ by Traveller Vishwa*")
 
 if __name__ == "__main__":
     main()
