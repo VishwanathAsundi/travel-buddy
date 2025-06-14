@@ -67,9 +67,9 @@ class GooglePlacesService:
             
             # Define search queries based on type
             search_queries = {
-                'tourist_places': ['beaches', 'mountains', 'tourist attraction', 'museum', 'park', 'zoo', 'amusement park', 'temples'],
-                'restaurants': ['restaurant', 'food', 'meal takeaway', 'unique food'],
-                'activities': ['trekking', 'sports', 'shopping mall', 'night club', 'yoga', 'concerts', 'new experiences'],
+                'tourist_places': ['beaches', 'mountains', 'hill_station','tourist_attraction', 'museum', 'park', 'zoo', 'amusement_park', 'temples'],
+                'restaurants': ['restaurant', 'food', 'meal_takeaway', 'unique_food'],
+                'activities': ['trekking', 'sports', 'shopping_mall', 'night_club', 'yoga', 'concerts', 'new experiences'],
                 'hotels': ['lodging', 'hotel', 'resorts']
             }
             
@@ -97,8 +97,8 @@ class GooglePlacesService:
             sorted_results = self._sort_places_by_quality(list(unique_results.values()))
             
             # Log top results for debugging
-            logging.info(f"Top 3 results for {place_type}:")
-            for i, place in enumerate(sorted_results[:3]):
+            logging.info(f"Top 5 results for {place_type}:")
+            for i, place in enumerate(sorted_results[:5]):
                 score = self._calculate_score(place)
                 logging.info(f"{i+1}. {place.get('name')} - Score: {score:.2f}, "
                            f"Rating: {place.get('rating', 'N/A')}, "
