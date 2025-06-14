@@ -68,8 +68,8 @@ class GooglePlacesService:
             # Define search queries based on type
             search_queries = {
                 'tourist_places': ['beaches', 'mountains', 'hill_station','tourist_attraction', 'museum', 'park', 'zoo', 'amusement_park', 'temples'],
-                'restaurants': ['restaurant', 'food', 'meal_takeaway', 'unique_food'],
-                'activities': ['trekking', 'sports', 'shopping_mall', 'night_club', 'yoga', 'concerts', 'new experiences'],
+                'restaurants': ['restaurant', 'food', 'meal takeaway', 'unique food', 'local dishes', 'local food'],
+                'activities': ['trekking','water falls', 'yoga', 'concerts', 'museums', 'park', 'zoo','sports', 'night club', 'sports club'],
                 'hotels': ['lodging', 'hotel', 'resorts']
             }
             
