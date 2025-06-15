@@ -8,10 +8,10 @@ def display_places_data(places_data, title):
         st.warning(f"No {title.lower()} found for this location.")
         return
     
-    st.subheader(f"📍 {title}")
-    
-    for i, place in enumerate(places_data[:5], 1):
-        with st.expander(f"{i}. {place.get('name', 'Unknown Place')} ⭐ {place.get('rating', 'N/A')}"):
+    st.subheader(f"{title}")
+
+    for i, place in enumerate(places_data[:10], 1):
+        with st.expander(f"{i}. {place.get('name', 'Unknown Place')}"):
             col1, col2 = st.columns(2)
             
             with col1:

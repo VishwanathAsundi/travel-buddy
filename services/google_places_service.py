@@ -23,9 +23,9 @@ class GooglePlacesService:
             popularity_bonus = 0
         
         # Credibility factor: places with very few reviews get penalized
-        if user_ratings_total < 5:
+        if user_ratings_total < 50:
             credibility_factor = 0.5  # Reduce score by 50%
-        elif user_ratings_total < 20:
+        elif user_ratings_total < 100:
             credibility_factor = 0.75  # Reduce score by 25%
         else:
             credibility_factor = 1.0  # No penalty
@@ -97,8 +97,8 @@ class GooglePlacesService:
             sorted_results = self._sort_places_by_quality(list(unique_results.values()))
             
             # Log top results for debugging
-            logging.info(f"Top 5 results for {place_type}:")
-            for i, place in enumerate(sorted_results[:5]):
+            logging.info(f"Top 3 results for {place_type}:")
+            for i, place in enumerate(sorted_results[:3]):
                 score = self._calculate_score(place)
                 logging.info(f"{i+1}. {place.get('name')} - Score: {score:.2f}, "
                            f"Rating: {place.get('rating', 'N/A')}, "
@@ -109,20 +109,6 @@ class GooglePlacesService:
         except Exception as e:
             logging.error(f"Google Places API error: {str(e)}")
             return []
-    
-    def get_place_details(self, place_id):
-        """Get detailed information about a specific place"""
-        try:
-            result = self.gmaps.place(
-                place_id=place_id,
-                fields=['name', 'rating', 'formatted_phone_number', 'formatted_address',
-                       'website', 'opening_hours', 'price_level', 'reviews', 'user_ratings_total',
-                        'photos', 'geometry', 'type', 'vicinity'] 
-            )
-            return result.get('result', {})
-        except Exception as e:
-            logging.error(f"Error getting place details: {str(e)}")
-            return {}
     
     def search_nearby_places(self, location, radius_km=50):
         """Search for nearby places to visit with enhanced sorting"""
@@ -145,34 +131,103 @@ class GooglePlacesService:
             # Sort nearby places by quality as well
             sorted_results = self._sort_places_by_quality(results)
             
-            return sorted_results[:10]
+            return sorted_results[:Config.MAX_RESULTS]
             
         except Exception as e:
             logging.error(f"Error searching nearby places: {str(e)}")
             return []
-    
-    def get_top_rated_places(self, location, place_type, min_rating=4.0, min_reviews=10, radius=None):
-        """Get only high-quality places with minimum rating and review thresholds"""
-        places = self.search_places(location, place_type, radius)
-        
-        # Filter by minimum criteria
-        filtered_places = [
-            place for place in places
-            if place.get('rating', 0) >= min_rating and 
-               place.get('user_ratings_total', 0) >= min_reviews
-        ]
-        
-        return filtered_places
-    
-    def print_place_ranking_info(self, places):
-        """Helper method to print detailed ranking information for debugging"""
-        print("\n=== PLACE RANKING DETAILS ===")
-        for i, place in enumerate(places[:10], 1):
-            name = place.get('name', 'Unknown')
-            rating = place.get('rating', 'N/A')
-            reviews = place.get('user_ratings_total', 0)
-            score = self._calculate_score(place)
+
+    def get_location_name_from_coords(self, lat, lng):
+        """Get location name from latitude and longitude coordinates using reverse geocoding"""
+        try:
+            # Perform reverse geocoding
+            reverse_geocode_result = self.gmaps.reverse_geocode((lat, lng))
             
-            print(f"{i:2d}. {name}")
-            print(f"    Rating: {rating} | Reviews: {reviews} | Score: {score:.2f}")
-            print("-" * 50)
+            if not reverse_geocode_result:
+                logging.warning(f"No results found for coordinates: {lat}, {lng}")
+                return None
+            
+            # Get the first result (most accurate)
+            result = reverse_geocode_result[0]
+            
+            # Try to get the most appropriate location name
+            # Priority: locality -> sublocality -> administrative_area_level_2 -> administrative_area_level_1
+            location_types = ['locality', 'sublocality', 'administrative_area_level_2', 'administrative_area_level_1']
+            
+            for location_type in location_types:
+                for component in result.get('address_components', []):
+                    if location_type in component.get('types', []):
+                        location_name = component.get('long_name')
+                        logging.info(f"Found location name: {location_name} for coordinates: {lat}, {lng}")
+                        return location_name
+            
+            # If no specific location type found, use formatted address
+            formatted_address = result.get('formatted_address', '')
+            if formatted_address:
+                # Extract the first part of the formatted address (usually the most specific location)
+                location_name = formatted_address.split(',')[0].strip()
+                logging.info(f"Using formatted address: {location_name} for coordinates: {lat}, {lng}")
+                return location_name
+            
+            logging.warning(f"Could not extract location name from reverse geocoding result for coordinates: {lat}, {lng}")
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error in reverse geocoding for coordinates {lat}, {lng}: {str(e)}")
+            return None
+
+    def search_places_by_coords(self, lat, lng, query_type, search_radius=None):
+        """Search for places using coordinates directly with enhanced sorting"""
+        if search_radius is None:
+            search_radius = Config.DEFAULT_SEARCH_RADIUS
+        
+        try:
+            # Create lat/lng location object
+            lat_lng = {'lat': lat, 'lng': lng}
+            
+            # Define search queries based on type
+            search_queries = {
+                'tourist_places': ['beaches', 'mountains', 'hill_station','tourist_attraction', 'museum', 'park', 'zoo', 'amusement_park', 'temples'],
+                'restaurants': ['restaurant', 'food', 'meal_takeaway', 'unique_food', 'local_dishes', 'local_food'],
+                'activities': ['trekking','water_falls', 'yoga', 'concerts', 'museums', 'park', 'zoo','sports', 'night_club', 'sports_club'],
+                'hotels': ['lodging', 'hotel', 'resorts']
+            }
+            
+            all_results = []
+            queries_to_search = search_queries.get(query_type, [query_type])
+            
+            for query in queries_to_search:
+                try:
+                    results = self.gmaps.places_nearby(
+                        location=lat_lng,
+                        radius=search_radius,
+                        type=query
+                    )
+                    all_results.extend(results.get('results', []))
+                except Exception as e:
+                    logging.warning(f"Error searching for {query} at coordinates {lat}, {lng}: {str(e)}")
+                    continue
+            
+            # Remove duplicates based on place_id
+            unique_results = {}
+            for place in all_results:
+                place_id = place.get('place_id')
+                if place_id and place_id not in unique_results:
+                    unique_results[place_id] = place
+            
+            # Enhanced sorting by quality score
+            sorted_results = self._sort_places_by_quality(list(unique_results.values()))
+            
+            # Log top results for debugging
+            logging.info(f"Top 3 results for {query_type} at coordinates {lat}, {lng}:")
+            for i, place in enumerate(sorted_results[:3]):
+                score = self._calculate_score(place)
+                logging.info(f"{i+1}. {place.get('name')} - Score: {score:.2f}, "
+                           f"Rating: {place.get('rating', 'N/A')}, "
+                           f"Reviews: {place.get('user_ratings_total', 0)}")
+            
+            return sorted_results[:Config.MAX_RESULTS]
+            
+        except Exception as e:
+            logging.error(f"Google Places API error for coordinates {lat}, {lng}: {str(e)}")
+            return []

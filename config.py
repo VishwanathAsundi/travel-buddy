@@ -20,4 +20,4 @@ class Config:
     # App Configuration
     MAX_CONTEXT_MESSAGES = 10
     DEFAULT_SEARCH_RADIUS = 50000  # 50km in meters
-    MAX_RESULTS = 10
+    MAX_RESULTS = 15
