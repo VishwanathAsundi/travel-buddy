@@ -4,47 +4,98 @@ from utils.helpers import display_places_data, format_ai_response
 class UIComponents:
     """Reusable UI components for the Travel Buddy app"""
     
+    def display_app_header(self):
+        """Display the app header"""
+        st.title("🧳 Travel Buddy 🏍️")
+        st.markdown("*Your AI-powered travel companion for discovering amazing places, restaurants, activities, and accommodations worldwide.*")
+
     def display_welcome_screen(self):
-        """Display the welcome screen with feature information"""
-        st.info("👈 Please enter a location in the sidebar to get started!")
-        
-        # Display sample queries
+        """Display a modern welcome screen using cards with a clean, elegant UI"""
+
+        st.markdown("""
+            <style>
+                .card {
+                    background-color: #f9f9f9;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+                    transition: transform 0.2s ease;
+                    border-left: 2px solid #ccc;
+                }
+                .card h4 {
+                    margin-top: 0;
+                    color: #2c3e50;
+                }
+                .card ul {
+                    padding-left: 20px;
+                }
+                .info-box {
+                    background-color: #eaf4ff;
+                    padding: 15px 20px;
+                    border-left: 5px solid #3399ff;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    color: #2c3e50;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div class="info-box">👈 <strong>Please enter a location in the sidebar to get started!</strong></div>', unsafe_allow_html=True)
+
         st.subheader("🌟 What Travel Buddy can help you with:")
-        
+
         col1, col2 = st.columns(2)
+
         with col1:
             st.markdown("""
-            **🏛️ Tourist Places**
-            - Top attractions and landmarks
-            - Hidden gems and local favorites
-            - Cultural and historical sites
-            - Best visiting times
-            """)
-            
+                <div class="card">
+                    <h4>🏛️ Tourist Places</h4>
+                    <ul>
+                        <li>Top attractions and landmarks</li>
+                        <li>Hidden gems and local favorites</li>
+                        <li>Cultural and historical sites</li>
+                        <li>Best visiting times</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
             st.markdown("""
-            **🍽️ Restaurants**
-            - Local cuisine recommendations
-            - Price ranges and cost estimates
-            - Popular dishes to try
-            - Restaurant ratings and reviews
-            """)
-        
+                <div class="card">
+                    <h4>🍽️ Restaurants</h4>
+                    <ul>
+                        <li>Local cuisine recommendations</li>
+                        <li>Price ranges and cost estimates</li>
+                        <li>Popular dishes to try</li>
+                        <li>Restaurant ratings and reviews</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
         with col2:
             st.markdown("""
-            **🎯 Activities**
-            - Adventure and outdoor activities
-            - Cultural experiences
-            - Entertainment options
-            - Seasonal recommendations
-            """)
-            
+                <div class="card">
+                    <h4>🎯 Activities</h4>
+                    <ul>
+                        <li>Adventure and outdoor activities</li>
+                        <li>Cultural experiences</li>
+                        <li>Entertainment options</li>
+                        <li>Seasonal recommendations</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
+
             st.markdown("""
-            **🏨 Hotels & Resorts**
-            - Accommodation options
-            - Price ranges per night
-            - Amenities and features
-            - Location advantages
-            """)
+                <div class="card">
+                    <h4>🏨 Hotels & Resorts</h4>
+                    <ul>
+                        <li>Accommodation options</li>
+                        <li>Price ranges per night</li>
+                        <li>Amenities and features</li>
+                        <li>Location advantages</li>
+                    </ul>
+                </div>
+            """, unsafe_allow_html=True)
 
         self.display_footer()
     
@@ -89,7 +140,7 @@ class UIComponents:
     def display_footer(self):
         """Display app footer"""
         st.markdown("---")
-        st.markdown("*Built with ❤️ by Traveller for Travellers*")
+        st.markdown("*Built with ❤️ by a Traveller for Travellers*")
     
     def create_chat_message_html(self, message, is_user=True):
         """Create HTML for chat message display"""

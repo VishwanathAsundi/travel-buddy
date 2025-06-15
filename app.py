@@ -47,8 +47,7 @@ def main():
     chat_interface = ChatInterface()
 
     # App header
-    st.title("🧳 Travel Buddy 🏍️")
-    st.markdown("*Your AI-powered travel companion for discovering amazing places, restaurants, activities, and accommodations.*")
+    ui_components.display_app_header()
     
     # Render sidebar and get search parameters
     search_params = sidebar_manager.render_sidebar()
