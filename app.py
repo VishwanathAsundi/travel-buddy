@@ -304,15 +304,21 @@ def main():
     
     # Handle search
     if search_clicked or st.session_state.get('last_search') != (location, query_type):
-        with st.spinner(f"🔍 Searching for {selected_query_type.lower()} in {location}..."):
+        with st.spinner(f"🔍 Searching for the best {selected_query_type.lower()} in {location}..."):
             # Search for places
             places_data = services['places'].search_places(location, query_type, search_radius)
             
             if places_data:
                 # Generate AI recommendations
                 context_history = services['context'].get_context_messages()
-                user_query = f"Show me the best {selected_query_type.lower()} in {location}"
-                
+
+                user_query = ''
+
+                if query_type == 'activities':
+                    user_query = f"Show me the best activities in {location}, exclude spas, hotels, temples, restaurants, accommodation, and shopping. Only show actual activities and experiences."
+                else:
+                    user_query = f"Show me the best {query_type.lower()} in {location}"
+
                 ai_response = services['openai'].generate_travel_recommendations(
                     places_data, query_type, user_query, context_history
                 )

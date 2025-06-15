@@ -23,9 +23,9 @@ class GooglePlacesService:
             popularity_bonus = 0
         
         # Credibility factor: places with very few reviews get penalized
-        if user_ratings_total < 5:
+        if user_ratings_total < 50:
             credibility_factor = 0.5  # Reduce score by 50%
-        elif user_ratings_total < 20:
+        elif user_ratings_total < 100:
             credibility_factor = 0.75  # Reduce score by 25%
         else:
             credibility_factor = 1.0  # No penalty
@@ -52,8 +52,125 @@ class GooglePlacesService:
         
         return sorted(places, key=sort_key)
     
+    def _filter_by_category(self, places, category, category_filters):
+        """Filter places based on category-specific criteria"""
+        if category not in category_filters:
+            return places
+        
+        filters = category_filters[category]
+        include_keywords = filters.get('include_keywords', [])
+        exclude_keywords = filters.get('exclude_keywords', [])
+        
+        filtered_places = []
+        
+        for place in places:
+            name = place.get('name', '').lower()
+            types = [t.lower() for t in place.get('types', [])]
+            vicinity = place.get('vicinity', '').lower()
+            
+            # Combine all text for keyword matching
+            combined_text = f"{name} {' '.join(types)} {vicinity}"
+            
+            # Check if place should be excluded
+            should_exclude = any(keyword in combined_text for keyword in exclude_keywords)
+            if should_exclude:
+                continue
+            
+            # Check if place matches category (for stricter filtering)
+            matches_category = False
+            
+            # Check against include keywords
+            if any(keyword in combined_text for keyword in include_keywords):
+                matches_category = True
+            
+            # Check against place types for category alignment
+            category_type_mapping = {
+                'tourist_places': [
+                    'tourist_attraction', 
+                    'museum', 
+                    'park', 
+                    'zoo', 
+                    'amusement_park', 
+                    'aquarium',
+                    'art_gallery',
+                    'hindu_temple',
+                    'natural_feature',
+                    'campground'
+                ],
+                'restaurants': [
+                    'restaurant', 
+                    'meal_takeaway', 
+                    'cafe',
+                    'bakery',
+                    'bar',
+                    'food'
+                ],
+                'activities': [
+                    'spa',
+                    'bowling_alley',
+                    'movie_theater',
+                    'night_club',
+                    'stadium',
+                    'tourist_attraction',
+                    'amusement_park',
+                    'park',
+                    'zoo',
+                    'aquarium',
+                    'casino',
+                    'movie_rental'
+                ],
+                'hotels': [
+                    'lodging',
+                    'campground',
+                    'rv_park'
+                ]
+            }
+            
+            relevant_types = category_type_mapping.get(category, [])
+            if any(place_type in types for place_type in relevant_types):
+                matches_category = True
+            
+            # For tourist places, be more lenient with highly rated places
+            if category == 'tourist_places' and place.get('rating', 0) >= 4.0:
+                matches_category = True
+            
+            if matches_category:
+                filtered_places.append(place)
+        
+        return filtered_places
+    
+    def _calculate_relevance_score(self, place, category):
+        """Calculate how relevant a place is to the requested category"""
+        name = place.get('name', '').lower()
+        types = [t.lower() for t in place.get('types', [])]
+        
+        relevance_score = 0
+        
+        # Category-specific scoring
+        if category == 'tourist_places':
+            tourist_keywords = ['temple', 'museum', 'park', 'fort', 'palace', 'monument', 'heritage', 'scenic', 'viewpoint', 'attraction']
+            relevance_score += sum(2 for keyword in tourist_keywords if keyword in name)
+            relevance_score += sum(1 for place_type in types if place_type in ['tourist_attraction', 'museum', 'park', 'church', 'hindu_temple'])
+            
+        elif category == 'restaurants':
+            food_keywords = ['restaurant', 'cafe', 'kitchen', 'dining', 'food', 'cuisine']
+            relevance_score += sum(2 for keyword in food_keywords if keyword in name)
+            relevance_score += sum(1 for place_type in types if place_type in ['restaurant', 'cafe', 'meal_takeaway'])
+            
+        elif category == 'activities':
+            activity_keywords = ['club', 'center', 'studio', 'sports', 'gym', 'adventure']
+            relevance_score += sum(2 for keyword in activity_keywords if keyword in name)
+            relevance_score += sum(1 for place_type in types if place_type in ['gym', 'spa', 'night_club', 'bowling_alley'])
+            
+        elif category == 'hotels':
+            hotel_keywords = ['hotel', 'resort', 'lodge', 'inn', 'stay']
+            relevance_score += sum(2 for keyword in hotel_keywords if keyword in name)
+            relevance_score += sum(1 for place_type in types if place_type == 'lodging')
+        
+        return relevance_score
+    
     def search_places(self, location, place_type, radius=None):
-        """Search for places using Google Places API with enhanced sorting"""
+        """Search for places using Google Places API with enhanced sorting and category filtering"""
         if radius is None:
             radius = Config.DEFAULT_SEARCH_RADIUS
         
@@ -65,15 +182,71 @@ class GooglePlacesService:
             
             lat_lng = geocode_result[0]['geometry']['location']
             
-            # Define search queries based on type
+            # Define search queries based on type with proper Google Places API types
             search_queries = {
-                'tourist_places': ['beaches', 'mountains', 'hill_station','tourist_attraction', 'museum', 'park', 'zoo', 'amusement_park', 'temples'],
-                'restaurants': ['restaurant', 'food', 'meal takeaway', 'unique food', 'local dishes', 'local food'],
-                'activities': ['trekking','water falls', 'yoga', 'concerts', 'museums', 'park', 'zoo','sports', 'night club', 'sports club'],
-                'hotels': ['lodging', 'hotel', 'resorts']
+                'tourist_places': [
+                    'tourist_attraction', 
+                    'museum', 
+                    'park', 
+                    'zoo', 
+                    'amusement_park', 
+                    'aquarium',
+                    'art_gallery',
+                    'hindu_temple',
+                    'natural_feature',
+                    'campground'
+                ],
+                'restaurants': [
+                    'restaurant', 
+                    'meal_takeaway', 
+                    'cafe',
+                    'bakery',
+                    'bar',
+                    'food'
+                ],
+                'activities': [
+                    'spa',
+                    'bowling_alley',
+                    'movie_theater',
+                    'night_club',
+                    'stadium',
+                    'tourist_attraction',
+                    'amusement_park',
+                    'park',
+                    'zoo',
+                    'aquarium',
+                    'casino',
+                    'movie_rental'
+                ],
+                'hotels': [
+                    'lodging',
+                    'campground',
+                    'rv_park'
+                ]
+            }
+            
+            # Category-specific filtering keywords
+            category_filters = {
+                'tourist_places': {
+                    'include_keywords': ['tourist', 'attraction', 'museum', 'park', 'temple', 'church', 'monument', 'heritage', 'scenic', 'viewpoint', 'fort', 'palace'],
+                    'exclude_keywords': ['restaurant', 'hotel', 'lodge', 'food', 'cafe', 'bar', 'gym', 'hospital', 'bank', 'university', 'travel_agency']
+                },
+                'restaurants': {
+                    'include_keywords': ['restaurant', 'cafe', 'food', 'dining', 'kitchen', 'bistro', 'eatery', 'cuisine'],
+                    'exclude_keywords': ['hotel', 'lodge', 'hospital', 'gym', 'temple', 'museum', 'university', 'travel_agency']
+                },
+                'activities': {
+                    'include_keywords': ['activity', 'adventure', 'sports', 'recreation', 'entertainment', 'club', 'center', 'studio'],
+                    'exclude_keywords': ['hotel', 'restaurant', 'spa', 'food', 'lodge', 'hospital', 'bank', 'university', 'hindu_temple', 'church', 'mosque', 'travel_agency']
+                },
+                'hotels': {
+                    'include_keywords': ['hotel', 'resort', 'lodge', 'accommodation', 'stay', 'inn', 'guest house'],
+                    'exclude_keywords': ['restaurant', 'cafe', 'food', 'hospital', 'gym', 'temple', 'museum', 'university', 'travel_agency']
+                }
             }
             
             all_results = []
+            
             for query in search_queries.get(place_type, [place_type]):
                 try:
                     results = self.gmaps.places_nearby(
@@ -93,8 +266,11 @@ class GooglePlacesService:
                 if place_id and place_id not in unique_results:
                     unique_results[place_id] = place
             
+            # Filter results based on category
+            filtered_results = self._filter_by_category(list(unique_results.values()), place_type, category_filters)
+            
             # Enhanced sorting by quality score
-            sorted_results = self._sort_places_by_quality(list(unique_results.values()))
+            sorted_results = self._sort_places_by_quality(filtered_results)
             
             # Log top results for debugging
             logging.info(f"Top 5 results for {place_type}:")
