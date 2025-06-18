@@ -77,7 +77,7 @@ class GooglePlacesService:
                 place_id=place_id,
                 fields=['name', 'rating', 'formatted_phone_number', 'formatted_address',
                        'website', 'opening_hours', 'price_level', 'reviews', 'user_ratings_total',
-                        'photos', 'geometry', 'type', 'vicinity'] 
+                        'photos', 'geometry', 'type', 'vicinity', 'international_phone_number', 'url', 'business_status'] 
             )
             return result.get('result', {})
         except Exception as e:

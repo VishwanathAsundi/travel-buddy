@@ -72,7 +72,7 @@ class ChatInterface:
             # Create button container
             with st.container():
                 # Create columns: wide left for Send button, right-aligned narrow column for Clear Chat
-                col1, col2 = st.columns([6, 1])
+                col1, col2 = st.columns([9, 1])
 
                 with col1:
                     submit_button = st.form_submit_button(
@@ -82,7 +82,11 @@ class ChatInterface:
                     )
 
                 with col2:
-                    clear_btn_clicked = st.form_submit_button("🗑️ Clear Chat")
+                    clear_btn_clicked = st.form_submit_button(
+                        "🗑️ Clear Chat",
+                        type="secondary",
+                        disabled=st.session_state.processing_question
+                    )
         
         return {
             'question': follow_up_question,

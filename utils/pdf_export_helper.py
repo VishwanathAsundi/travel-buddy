@@ -2,319 +2,581 @@ import streamlit as st
 import time
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.units import inch, cm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
+from reportlab.platypus.tableofcontents import TableOfContents
+from reportlab.graphics.shapes import Drawing, Rect, Line
+from reportlab.graphics import renderPDF
 import io
 from datetime import datetime
 import re
+import logging
+
+def create_beautiful_header_line(width=6*inch, color='#2E86AB'):
+    """Create a decorative header line"""
+    drawing = Drawing(width, 10)
+    drawing.add(Line(0, 5, width, 5, strokeColor=colors.HexColor(color), strokeWidth=2))
+    return drawing
+
+def create_section_divider(width=6*inch, color='#E8E8E8'):
+    """Create a subtle section divider"""
+    drawing = Drawing(width, 15)
+    drawing.add(Line(width*0.25, 7, width*0.75, 7, strokeColor=colors.HexColor(color), strokeWidth=1))
+    return drawing
 
 def create_pdf_report(search_results, conversation_history=None):
-    """Create a PDF report with travel recommendations and optional chat history"""
-    # Ensure conversation_history is a list
+    """Create a beautifully formatted PDF report with travel recommendations and chat history"""
     if conversation_history is None:
         conversation_history = []
     
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
-                           topMargin=72, bottomMargin=18)
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=A4, 
+        rightMargin=50, 
+        leftMargin=50, 
+        topMargin=60, 
+        bottomMargin=50
+    )
     
-    # Container for the 'Flowable' objects
     elements = []
-    
-    # Define styles (keep all your existing styles here)
     styles = getSampleStyleSheet()
     
-    # Custom styles
+    # Enhanced Custom Styles
     title_style = ParagraphStyle(
-        'CustomTitle',
+        'BeautifulTitle',
         parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=30,
+        fontSize=28,
+        spaceAfter=20,
+        spaceBefore=20,
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#2E86AB')
+        textColor=colors.HexColor('#1A365D'),
+        fontName='Helvetica-Bold'
     )
     
     subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
+        'BeautifulSubtitle',
         parent=styles['Heading2'],
+        fontSize=18,
+        spaceAfter=15,
+        spaceBefore=20,
+        textColor=colors.HexColor('#2D3748'),
+        fontName='Helvetica-Bold',
+        borderPadding=5
+    )
+    
+    section_header_style = ParagraphStyle(
+        'SectionHeader',
+        parent=styles['Heading3'],
         fontSize=16,
-        spaceAfter=20,
-        textColor=colors.HexColor('#A23B72')
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=11,
         spaceAfter=12,
-        alignment=TA_JUSTIFY
+        spaceBefore=15,
+        textColor=colors.HexColor('#2B6CB0'),
+        fontName='Helvetica-Bold',
+        leftIndent=0
     )
     
-    # Enhanced chat styles with better visual separation
-    chat_user_style = ParagraphStyle(
-        'ChatUser',
+    place_title_style = ParagraphStyle(
+        'PlaceTitle',
         parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=6,
-        spaceBefore=8,
-        leftIndent=20,
-        rightIndent=20,
-        textColor=colors.HexColor('#2C5F2D'),
-        backColor=colors.HexColor('#F0F8F0'),  # Light green background
-        borderColor=colors.HexColor('#2C5F2D'),
+        fontSize=14,
+        spaceAfter=8,
+        spaceBefore=12,
+        textColor=colors.HexColor('#1A202C'),
+        fontName='Helvetica-Bold',
+        backColor=colors.HexColor('#F7FAFC'),
+        borderColor=colors.HexColor('#E2E8F0'),
         borderWidth=1,
         borderPadding=8,
-        borderRadius=5
+        borderRadius=3
+    )
+    
+    place_detail_style = ParagraphStyle(
+        'PlaceDetail',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=6,
+        leftIndent=15,
+        rightIndent=15,
+        alignment=TA_JUSTIFY,
+        textColor=colors.HexColor('#2D3748'),
+        leading=14
+    )
+    
+    info_box_style = ParagraphStyle(
+        'InfoBox',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=8,
+        leftIndent=20,
+        rightIndent=20,
+        backColor=colors.HexColor('#EBF8FF'),
+        borderColor=colors.HexColor('#3182CE'),
+        borderWidth=1,
+        borderPadding=10,
+        borderRadius=5,
+        textColor=colors.HexColor('#2A4365')
+    )
+    
+    # Enhanced Chat Styles
+    chat_user_style = ParagraphStyle(
+        'ChatUserBeautiful',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=10,
+        spaceBefore=8,
+        leftIndent=30,
+        rightIndent=80,
+        backColor=colors.HexColor('#F0FFF4'),
+        borderColor=colors.HexColor('#38A169'),
+        borderWidth=1,
+        borderPadding=12,
+        borderRadius=8,
+        textColor=colors.HexColor('#1A202C')
     )
     
     chat_ai_style = ParagraphStyle(
-        'ChatAI',
+        'ChatAIBeautiful',
         parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=6,
+        fontSize=11,
+        spaceAfter=10,
         spaceBefore=8,
-        leftIndent=20,
-        rightIndent=20,
-        textColor=colors.HexColor('#97233F'),
-        backColor=colors.HexColor('#FFF0F3'),  # Light pink background
-        borderColor=colors.HexColor('#97233F'),
+        leftIndent=80,
+        rightIndent=30,
+        backColor=colors.HexColor('#FFF5F5'),
+        borderColor=colors.HexColor('#E53E3E'),
         borderWidth=1,
-        borderPadding=8,
-        borderRadius=5
+        borderPadding=12,
+        borderRadius=8,
+        textColor=colors.HexColor('#1A202C')
     )
     
-    # Style for conversation metadata (timestamps, etc.)
-    chat_meta_style = ParagraphStyle(
-        'ChatMeta',
+    meta_style = ParagraphStyle(
+        'MetaStyle',
         parent=styles['Normal'],
-        fontSize=8,
-        spaceAfter=3,
-        leftIndent=25,
-        textColor=colors.HexColor('#666666'),
+        fontSize=9,
+        spaceAfter=5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#718096'),
         fontName='Helvetica-Oblique'
     )
     
-    # Style for conversation section divider
-    divider_style = ParagraphStyle(
-        'Divider',
-        parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=10,
-        spaceBefore=10,
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#888888')
-    )
+    # Beautiful Header Section
+    elements.append(create_beautiful_header_line())
+    elements.append(Spacer(1, 10))
     
-    # Title
-    title = Paragraph("🧳 Travel Buddy Recommendations", title_style)
+    # Main Title with Icon
+    title = Paragraph("🌟 Travel Buddy Recommendations", title_style)
     elements.append(title)
     
-    # Generated date
-    date_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
-    date_para = Paragraph(f"Generated on {date_str}", styles['Normal'])
-    elements.append(date_para)
-    elements.append(Spacer(1, 20))
+    # Subtitle with date
+    date_str = datetime.now().strftime("%B %d, %Y")
+    subtitle = Paragraph(f"Your Personalized Travel Guide • {date_str}", meta_style)
+    elements.append(subtitle)
     
-    # Location and search type
-    location_info = Paragraph(f"<b>Location:</b> {search_results['location']}", normal_style)
-    elements.append(location_info)
+    elements.append(Spacer(1, 15))
+    elements.append(create_beautiful_header_line())
+    elements.append(Spacer(1, 25))
     
+    # Trip Information Box
     query_type_map = {
-        "tourist_places": "Tourist Places",
-        "restaurants": "Restaurants",
-        "activities": "Activities",
-        "hotels": "Hotels & Resorts"
+        "tourist_places": "🏛️ Tourist Places & Attractions",
+        "restaurants": "🍽️ Restaurants & Dining",
+        "activities": "🎯 Activities & Adventures", 
+        "hotels": "🏨 Hotels & Accommodations"
     }
     query_display = query_type_map.get(search_results['query_type'], search_results['query_type'])
-    query_info = Paragraph(f"<b>Search Type:</b> {query_display}", normal_style)
-    elements.append(query_info)
-    elements.append(Spacer(1, 20))
     
-    # AI Recommendations
-    rec_title = Paragraph("🤖 AI Travel Recommendations", subtitle_style)
-    elements.append(rec_title)
+    trip_info = f"""
+    📍 <b>Destination:</b> {search_results['location']}<br/>
+    🔍 <b>Search Focus:</b> {query_display}<br/>
+    📅 <b>Report Generated:</b> {datetime.now().strftime("%I:%M %p, %B %d, %Y")}
+    """
     
-    # Clean and format AI response
-    cleaned_response = clean_text_for_pdf(search_results['ai_response'])
+    info_box = Paragraph(trip_info, info_box_style)
+    elements.append(info_box)
+    elements.append(Spacer(1, 25))
     
-    # Split response into paragraphs and format
-    paragraphs = cleaned_response.split('\n\n')
-    for para in paragraphs:
-        if para.strip():
-            # Handle numbered lists
-            if re.match(r'^\d+\.', para.strip()):
-                para_obj = Paragraph(para.strip(), normal_style)
-            else:
-                para_obj = Paragraph(para.strip(), normal_style)
-            elements.append(para_obj)
+    # AI Recommendations Section
+    rec_section = Paragraph("🤖 Your AI Travel Recommendations", subtitle_style)
+    elements.append(rec_section)
+    elements.append(create_section_divider())
+    elements.append(Spacer(1, 15))
     
-    elements.append(Spacer(1, 20))
+    # Parse and beautifully format AI response
+    ai_response = search_results.get('ai_response', '')
+    formatted_recommendations = format_ai_recommendations(ai_response, place_title_style, place_detail_style, info_box_style)
     
-    # Places Details Table
+    for element in formatted_recommendations:
+        elements.append(element)
+    
+    elements.append(Spacer(1, 25))
+    
+    # Detailed Places Table (Enhanced)
     if search_results.get('places_data'):
-        places_title = Paragraph("📊 Detailed Place Information", subtitle_style)
-        elements.append(places_title)
-        
-        # Create table data
-        table_data = [['Name', 'Rating', 'Price Level', 'Address']]
-        
-        for place in search_results['places_data'][:10]:  # Limit to first 10 places
-            name = place.get('name', 'N/A')[:30]  # Truncate long names
-            rating = str(place.get('rating', 'N/A'))
-            price_level = '💰' * place.get('price_level', 0) if place.get('price_level') else 'N/A'
-            address = place.get('vicinity', place.get('formatted_address', 'N/A'))[:40]
-            
-            table_data.append([name, rating, price_level, address])
-        
-        # Create table
-        table = Table(table_data, colWidths=[2.2*inch, 0.8*inch, 1*inch, 2.5*inch])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ]))
-        
-        elements.append(table)
-        elements.append(Spacer(1, 20))
-    
-    # Enhanced Chat History Section - ONLY if there's meaningful conversation
-    if conversation_history and len(conversation_history) > 2:
-        elements.append(PageBreak())
-        chat_title = Paragraph("💬 Your Travel Conversation", subtitle_style)
-        elements.append(chat_title)
-        
-        # Add conversation summary
-        summary_text = f"This section contains your personalized travel conversation with {len(conversation_history)} total messages."
-        summary_para = Paragraph(summary_text, normal_style)
-        elements.append(summary_para)
+        places_section = Paragraph("📊 Quick Reference Guide", subtitle_style)
+        elements.append(places_section)
+        elements.append(create_section_divider())
         elements.append(Spacer(1, 15))
         
-        # Skip initial search messages, show only follow-up conversations
+        table = create_beautiful_places_table(search_results['places_data'])
+        elements.append(table)
+        elements.append(Spacer(1, 25))
+    
+    # Enhanced Chat History Section
+    if conversation_history and len(conversation_history) > 2:
+        elements.append(PageBreak())
+        
+        chat_header = Paragraph("💬 Your Travel Conversation", subtitle_style)
+        elements.append(chat_header)
+        elements.append(create_section_divider())
+        elements.append(Spacer(1, 15))
+        
+        # Conversation summary
         follow_up_messages = conversation_history[2:] if len(conversation_history) > 2 else []
-        
-        # Remove duplicates and clean messages
-        seen_messages = set()
-        unique_messages = []
-        for msg in follow_up_messages:
-            msg_content = msg.get('content', '').strip()
-            msg_hash = hash(msg_content.lower()[:100])  # Use hash of first 100 chars
-            if msg_content and msg_hash not in seen_messages:
-                seen_messages.add(msg_hash)
-                unique_messages.append(msg)
-        
-        # Show conversation with better formatting
-        conversation_count = 0
-        for i, msg in enumerate(unique_messages[-15:], 1):  # Show last 15 messages
-            conversation_count += 1
-            
-            # Add conversation number for longer conversations
-            if conversation_count == 1 and len(unique_messages) > 5:
-                divider = Paragraph(f"─── Conversation Messages ───", divider_style)
-                elements.append(divider)
-            
-            if msg['role'] == 'user':
-                # User message with icon and formatting
-                cleaned_content = clean_text_for_pdf(msg['content'])
-                if len(cleaned_content) > 500:
-                    cleaned_content = cleaned_content[:500] + "..."
-                
-                user_text = f"<b>👤 You:</b><br/>{cleaned_content}"
-                user_para = Paragraph(user_text, chat_user_style)
-                elements.append(user_para)
-                
-            else:
-                # AI message with icon and formatting
-                cleaned_content = clean_text_for_pdf(msg['content'])
-                if len(cleaned_content) > 800:
-                    cleaned_content = cleaned_content[:800] + "..."
-                
-                ai_text = f"<b>🤖 Travel Buddy:</b><br/>{cleaned_content}"
-                ai_para = Paragraph(ai_text, chat_ai_style)
-                elements.append(ai_para)
-            
-            # Add small spacer between messages
-            elements.append(Spacer(1, 5))
-            
-            # Add section break every 5 messages for readability
-            if conversation_count % 5 == 0 and conversation_count < len(unique_messages[-15:]):
-                section_break = Paragraph("• • •", divider_style)
-                elements.append(section_break)
-        
-        # Add conversation statistics
+        summary_text = f"💡 This conversation contains {len(follow_up_messages)} personalized questions and detailed AI responses to help you plan your perfect trip."
+        summary = Paragraph(summary_text, info_box_style)
+        elements.append(summary)
         elements.append(Spacer(1, 20))
+        
+        # Format conversation beautifully
+        chat_elements = format_conversation_history(follow_up_messages, chat_user_style, chat_ai_style, meta_style)
+        for element in chat_elements:
+            elements.append(element)
     
     elif conversation_history and len(conversation_history) <= 2:
-        # Add a note when there's only initial search without follow-up conversation
         elements.append(Spacer(1, 20))
-        no_chat_note = Paragraph("💡 <i>No follow-up conversation yet. Start chatting to include your questions and AI responses in future reports!</i>", 
-                                ParagraphStyle('NoChat', parent=styles['Normal'], fontSize=10, 
-                                             alignment=TA_CENTER, textColor=colors.HexColor('#666666')))
+        no_chat_note = Paragraph(
+            "💡 <i>Start a conversation with Travel Buddy! Ask follow-up questions about your destination, and they'll appear in your next PDF report with personalized answers.</i>", 
+            ParagraphStyle('NoChat', parent=styles['Normal'], fontSize=11, 
+                         alignment=TA_CENTER, textColor=colors.HexColor('#718096'),
+                         backColor=colors.HexColor('#F7FAFC'), borderPadding=15,
+                         borderColor=colors.HexColor('#E2E8F0'), borderWidth=1)
+        )
         elements.append(no_chat_note)
     
-    # Enhanced Footer
-    elements.append(Spacer(1, 30))
-    footer_line = Paragraph("─" * 60, ParagraphStyle('FooterLine', parent=styles['Normal'], 
-                           fontSize=8, alignment=TA_CENTER, textColor=colors.grey))
-    elements.append(footer_line)
+    # Beautiful Footer
+    elements.append(Spacer(1, 40))
+    elements.append(create_section_divider())
+    elements.append(Spacer(1, 15))
     
-    footer = Paragraph("Built with ❤️ by Traveller Vishwa - Travel Buddy App<br/>Your Personal AI Travel Companion", 
-                      ParagraphStyle('Footer', parent=styles['Normal'], 
-                                   fontSize=8, alignment=TA_CENTER, 
-                                   textColor=colors.grey, spaceAfter=5))
+    footer_content = """
+    <b>✈️ Travel Buddy App</b><br/>
+    Your Personal AI Travel Companion<br/>
+    <i>Crafted with ❤️ by Traveller Vishwa</i>
+    """
+    
+    footer = Paragraph(footer_content, 
+                      ParagraphStyle('BeautifulFooter', parent=styles['Normal'], 
+                                   fontSize=10, alignment=TA_CENTER, 
+                                   textColor=colors.HexColor('#718096'),
+                                   leading=14))
     elements.append(footer)
     
-    # Build PDF
+    # Build PDF with error handling
     try:
         doc.build(elements)
     except Exception as e:
-        # Log the error and create a simple fallback PDF
         logging.error(f"Error building PDF: {str(e)}")
-        # Create a minimal PDF as fallback
-        elements = [
-            Paragraph("Travel Buddy Report", title_style),
-            Paragraph(f"Location: {search_results.get('location', 'Unknown')}", normal_style),
-            Paragraph("An error occurred while generating the full report.", normal_style),
-            Paragraph("Please try again or contact support.", normal_style)
+        # Create fallback minimal PDF
+        fallback_elements = [
+            Paragraph("🌟 Travel Buddy Report", title_style),
+            Spacer(1, 20),
+            Paragraph(f"📍 Destination: {search_results.get('location', 'Unknown')}", place_detail_style),
+            Spacer(1, 15),
+            Paragraph("⚠️ An error occurred while generating the full report. Please try again.", place_detail_style),
+            Spacer(1, 15),
+            Paragraph("If the problem persists, please contact our support team.", place_detail_style)
         ]
-        doc.build(elements)
+        doc.build(fallback_elements)
     
     buffer.seek(0)
     return buffer
 
+def format_ai_recommendations(ai_response, title_style, detail_style, info_style):
+    """Parse and beautifully format AI recommendations"""
+    elements = []
+    
+    if not ai_response:
+        return elements
+    
+    # Clean the text first
+    cleaned_text = clean_text_for_pdf(ai_response)
+    
+    # Split into sections - be more careful with regex
+    sections = re.split(r'(?=###\s|####\s|\d+\.\s+<b>)', cleaned_text)
+    
+    for section in sections:
+        if not section.strip():
+            continue
+            
+        try:
+            # Handle different section types
+            if section.startswith('###'):
+                # Main section header
+                lines = section.split('<br/>')
+                header_line = lines[0] if lines else section
+                header_text = re.sub(r'#{2,4}\s*', '', header_line)
+                
+                if header_text.strip():
+                    # Remove any remaining HTML tags from header
+                    clean_header = re.sub(r'<[^>]+>', '', header_text.strip())
+                    elements.append(Paragraph(f"🎯 {clean_header}", title_style))
+                    elements.append(Spacer(1, 10))
+                    
+                    # Add remaining content if any
+                    remaining_lines = lines[1:] if len(lines) > 1 else []
+                    if remaining_lines:
+                        remaining_content = '<br/>'.join(remaining_lines).strip()
+                        if remaining_content:
+                            elements.append(Paragraph(remaining_content, detail_style))
+                            elements.append(Spacer(1, 15))
+            
+            elif re.match(r'\d+\.\s+<b>', section.strip()):
+                # Numbered place entry
+                place_elements = format_place_entry_safe(section, title_style, detail_style, info_style)
+                elements.extend(place_elements)
+            
+            else:
+                # Regular paragraph
+                if section.strip():
+                    elements.append(Paragraph(section.strip(), detail_style))
+                    elements.append(Spacer(1, 10))
+                    
+        except Exception as e:
+            # If formatting fails, add as plain text
+            logging.warning(f"Failed to format section, using plain text: {str(e)}")
+            plain_text = re.sub(r'<[^>]+>', '', section.strip())
+            if plain_text:
+                elements.append(Paragraph(plain_text, detail_style))
+                elements.append(Spacer(1, 10))
+    
+    return elements
+
+def format_place_entry_safe(entry_text, title_style, detail_style, info_style):
+    """Safely format individual place entries with error handling"""
+    elements = []
+    
+    try:
+        lines = entry_text.strip().split('<br/>')
+        if not lines:
+            return elements
+        
+        # Extract place name and rating from first line
+        first_line = lines[0].strip()
+        place_match = re.match(r'(\d+)\.\s+<b>(.*?)</b>(?:\s*-\s*<b>Rating:</b>\s*([\d.]+))?', first_line)
+        
+        if place_match:
+            number, place_name, rating = place_match.groups()
+            
+            # Create beautiful place header
+            rating_stars = "⭐" * min(5, int(float(rating or 0))) if rating else ""
+            place_header = f"{number}. {place_name} {rating_stars}"
+            if rating:
+                place_header += f" ({rating}/5)"
+            
+            elements.append(Paragraph(place_header, title_style))
+            
+            # Process remaining details safely
+            details = []
+            
+            for line in lines[1:]:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Extract different types of information
+                if '<b>Address:</b>' in line:
+                    address = re.sub(r'.*?<b>Address:</b>\s*', '', line)
+                    address = re.sub(r'<[^>]+>', '', address)  # Remove any remaining tags
+                    details.append(f"📍 <b>Location:</b> {address}")
+                elif '<b>Description:</b>' in line:
+                    desc = re.sub(r'.*?<b>Description:</b>\s*', '', line)
+                    desc = re.sub(r'<[^>]+>', '', desc)  # Remove any remaining tags
+                    details.append(f"📝 <b>About:</b> {desc}")
+                elif '<b>Categories:</b>' in line:
+                    categories = re.sub(r'.*?<b>Categories:</b>\s*', '', line)
+                    categories = re.sub(r'<[^>]+>', '', categories)  # Remove any remaining tags
+                    details.append(f"🏷️ <b>Type:</b> {categories}")
+                else:
+                    # Handle any other content
+                    clean_line = re.sub(r'<[^>]+>', '', line)
+                    if clean_line.strip():
+                        details.append(clean_line.strip())
+            
+            # Add formatted details
+            for detail in details:
+                if detail.strip():
+                    elements.append(Paragraph(detail.strip(), detail_style))
+            
+            elements.append(Spacer(1, 15))
+            
+    except Exception as e:
+        # Fallback to plain text if anything goes wrong
+        logging.warning(f"Failed to format place entry, using plain text: {str(e)}")
+        plain_text = re.sub(r'<[^>]+>', '', entry_text.strip())
+        if plain_text:
+            elements.append(Paragraph(plain_text, detail_style))
+            elements.append(Spacer(1, 15))
+    
+    return elements
+
+def create_beautiful_places_table(places_data):
+    """Create a beautifully formatted places table"""
+    # Header with icons
+    table_data = [['🏛️ Place Name', '⭐ Rating', '💰 Price', '📍 Location']]
+    
+    for place in places_data[:12]:  # Show top 12 places
+        name = place.get('name', 'N/A')
+        if len(name) > 35:
+            name = name[:32] + "..."
+        
+        rating = place.get('rating', 'N/A')
+        rating_display = f"{rating}/5" if rating != 'N/A' else 'N/A'
+        
+        price_level = place.get('price_level', 0)
+        price_display = '💰' * price_level if price_level else 'N/A'
+        
+        address = place.get('vicinity', place.get('formatted_address', 'N/A'))
+        if len(address) > 45:
+            address = address[:42] + "..."
+        
+        table_data.append([name, rating_display, price_display, address])
+    
+    table = Table(table_data, colWidths=[2.5*inch, 1*inch, 0.8*inch, 2.2*inch])
+    
+    # Beautiful table styling
+    table.setStyle(TableStyle([
+        # Header styling
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2B6CB0')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 15),
+        ('TOPPADDING', (0, 0), (-1, 0), 15),
+        
+        # Data rows styling
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8F9FA')),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')]),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
+    ]))
+    
+    return table
+
+def format_conversation_history(messages, user_style, ai_style, meta_style):
+    """Format conversation history with beautiful styling"""
+    elements = []
+    
+    # Remove duplicates and get unique messages
+    seen_messages = set()
+    unique_messages = []
+    
+    for msg in messages:
+        content = msg.get('content', '').strip()
+        if content and len(content) > 10:  # Avoid very short messages
+            msg_hash = hash(content.lower()[:100])
+            if msg_hash not in seen_messages:
+                seen_messages.add(msg_hash)
+                unique_messages.append(msg)
+    
+    # Show last 20 messages for better context
+    recent_messages = unique_messages[-20:] if len(unique_messages) > 20 else unique_messages
+    
+    for i, msg in enumerate(recent_messages, 1):
+        role = msg.get('role', 'unknown')
+        content = msg.get('content', '')
+        
+        if role == 'user':
+            # Clean and limit user message length
+            clean_content = clean_text_for_pdf(content)
+            if len(clean_content) > 800:
+                clean_content = clean_content[:800] + "..."
+            
+            user_text = f"<b>👤 You asked:</b><br/><br/>{clean_content}"
+            try:
+                elements.append(Paragraph(user_text, user_style))
+            except Exception as e:
+                # Fallback to plain text if formatting fails
+                plain_text = f"You asked: {content[:500]}..."
+                elements.append(Paragraph(plain_text, user_style))
+            
+        elif role == 'assistant':
+            # Clean and limit AI response length  
+            clean_content = clean_text_for_pdf(content)
+            if len(clean_content) > 1200:
+                clean_content = clean_content[:1200] + "..."
+            
+            ai_text = f"<b>🤖 Travel Buddy replied:</b><br/><br/>{clean_content}"
+            try:
+                elements.append(Paragraph(ai_text, ai_style))
+            except Exception as e:
+                # Fallback to plain text if formatting fails
+                plain_text = f"Travel Buddy replied: {content[:500]}..."
+                elements.append(Paragraph(plain_text, ai_style))
+        
+        # Add conversation flow indicator
+        elements.append(Spacer(1, 8))
+        
+        # Add section break every 6 messages
+        if i % 6 == 0 and i < len(recent_messages):
+            elements.append(create_section_divider())
+            elements.append(Spacer(1, 10))
+    
+    return elements
+
 def clean_text_for_pdf(text):
-    """Enhanced text cleaning function for better PDF formatting"""
+    """Enhanced text cleaning for beautiful PDF formatting"""
     if not text:
         return ""
     
-    # Remove or replace problematic characters
-    text = text.replace('\u2019', "'")  # Right single quotation mark
-    text = text.replace('\u2018', "'")  # Left single quotation mark
-    text = text.replace('\u201c', '"')  # Left double quotation mark
-    text = text.replace('\u201d', '"')  # Right double quotation mark
-    text = text.replace('\u2013', '-')  # En dash
-    text = text.replace('\u2014', '--') # Em dash
-    text = text.replace('\u2026', '...') # Horizontal ellipsis
+    # Replace problematic Unicode characters
+    replacements = {
+        '\u2019': "'", '\u2018': "'", 
+        '\u201c': '"', '\u201d': '"',
+        '\u2013': '-', '\u2014': '--', 
+        '\u2026': '...', '\u00a0': ' ',
+        '\u2022': '•', '\u2023': '▶'
+    }
     
-    # Clean up excessive whitespace
-    text = re.sub(r'\n\s*\n', '\n\n', text)  # Multiple newlines to double newline
-    text = re.sub(r' +', ' ', text)  # Multiple spaces to single space
-    text = text.strip()
+    for old, new in replacements.items():
+        text = text.replace(old, new)
     
-    # Handle HTML-like tags that might be in the text
-    text = re.sub(r'<[^>]+>', '', text)
+    # Clean up whitespace and formatting
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)  # Multiple newlines
+    text = re.sub(r' +', ' ', text)  # Multiple spaces
     
-    # Escape XML/HTML characters for ReportLab
+    # First escape XML characters BEFORE processing markdown
     text = text.replace('&', '&amp;')
     text = text.replace('<', '&lt;')
     text = text.replace('>', '&gt;')
     
-    return text
+    # Now safely convert markdown to HTML
+    # Handle bold markdown **text** -> <b>text</b>
+    text = re.sub(r'\*\*([^*]+?)\*\*', r'<b>\1</b>', text)
+    # Handle italic markdown *text* -> <i>text</i> (but avoid conflicting with **)
+    text = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<i>\1</i>', text)
+    
+    # Handle line breaks
+    text = text.replace('\n', '<br/>')
+    
+    # Remove any remaining problematic characters or sequences
+    text = re.sub(r'<b>\s*</b>', '', text)  # Empty bold tags
+    text = re.sub(r'<i>\s*</i>', '', text)  # Empty italic tags
+    
+    # Fix any nested or malformed tags
+    text = re.sub(r'<b>([^<]*)<b>', r'<b>\1', text)  # Nested bold start
+    text = re.sub(r'</b>([^>]*)</b>', r'\1</b>', text)  # Nested bold end
+    text = re.sub(r'<i>([^<]*)<i>', r'<i>\1', text)  # Nested italic start
+    text = re.sub(r'</i>([^>]*)</i>', r'\1</i>', text)  # Nested italic end
+    
+    return text.strip()
