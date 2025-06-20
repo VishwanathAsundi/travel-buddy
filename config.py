@@ -13,6 +13,9 @@ class Config:
     CLIENT_ID = os.getenv('CLIENT_ID')
     CLIENT_SECRET = os.getenv('CLIENT_SECRET')
     OAUTH_URL = os.getenv('OAUTH_URL')
+
+    GOOGLE_PLACES_MAX_REQUESTS_PER_SECOND = int(os.getenv("GOOGLE_PLACES_MAX_REQUESTS_PER_SECOND", 10))
+    GOOGLE_PLACES_MAX_REQUESTS_PER_DAY = int(os.getenv("GOOGLE_PLACES_MAX_REQUESTS_PER_DAY", 100000))
     
     # Google Places API Configuration
     GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
