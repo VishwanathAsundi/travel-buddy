@@ -1,14 +1,10 @@
-import streamlit as st
-import time
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
-from reportlab.platypus.tableofcontents import TableOfContents
-from reportlab.graphics.shapes import Drawing, Rect, Line
-from reportlab.graphics import renderPDF
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.graphics.shapes import Drawing, Line
 import io
 from datetime import datetime
 import re
@@ -65,17 +61,6 @@ def create_pdf_report(search_results, conversation_history=None):
         textColor=colors.HexColor('#2D3748'),
         fontName='Helvetica-Bold',
         borderPadding=5
-    )
-    
-    section_header_style = ParagraphStyle(
-        'SectionHeader',
-        parent=styles['Heading3'],
-        fontSize=16,
-        spaceAfter=12,
-        spaceBefore=15,
-        textColor=colors.HexColor('#2B6CB0'),
-        fontName='Helvetica-Bold',
-        leftIndent=0
     )
     
     place_title_style = ParagraphStyle(
@@ -505,7 +490,7 @@ def format_conversation_history(messages, user_style, ai_style, meta_style):
             user_text = f"<b>👤 You asked:</b><br/><br/>{clean_content}"
             try:
                 elements.append(Paragraph(user_text, user_style))
-            except Exception as e:
+            except Exception:
                 # Fallback to plain text if formatting fails
                 plain_text = f"You asked: {content[:500]}..."
                 elements.append(Paragraph(plain_text, user_style))
@@ -519,7 +504,7 @@ def format_conversation_history(messages, user_style, ai_style, meta_style):
             ai_text = f"<b>🤖 Travel Buddy replied:</b><br/><br/>{clean_content}"
             try:
                 elements.append(Paragraph(ai_text, ai_style))
-            except Exception as e:
+            except Exception:
                 # Fallback to plain text if formatting fails
                 plain_text = f"Travel Buddy replied: {content[:500]}..."
                 elements.append(Paragraph(plain_text, ai_style))

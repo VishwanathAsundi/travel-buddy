@@ -1,6 +1,4 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
 
 def display_places_data(places_data, title):
     """Display places data in a formatted way"""

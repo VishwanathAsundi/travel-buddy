@@ -1,7 +1,6 @@
-from config import Config
 import logging
 import time
-from collections import defaultdict, deque
+from collections import deque
 from threading import Lock
 
 
